@@ -73,7 +73,7 @@
 
     Member "0,*"--u-"1,1" Role
     Member "0,*" -- "1,1" User
-    Member  "1,*" -- "0,*" Project
+    Member  "1,1" -- "0,*" Project
 
 @enduml
 
@@ -144,7 +144,7 @@ Project "1.1  "<---"0.*" Task
 Project "1.1 "<---"0.* " PaymentData
 Project "1.1"<---"0.*   " Review
 
-Project "0.*"<-l--"1.*" Member
+Project "0.*"<-l--"1.1" Member
 Role "1.1"<---"0.*" Member
 Role "1.1"<---"0.*" RoleGrant
 Permission "1.1"<---"0.*" RoleGrant
