@@ -33,6 +33,7 @@
     entity User.role #ffffff
 
     entity Member
+    entity ProjectMember 
     
     entity Role
     entity Role.id #ffffff
@@ -73,7 +74,9 @@
 
     Member "0,*"--u-"1,1" Role
     Member "0,*" -- "1,1" User
-    Member  "0,*" -- "1,1" Project
+    Member "1,1" -- "0,*" ProjectMember
+
+    ProjectMember "0,*" -- "1,1" Project
 
 @enduml
 
@@ -82,6 +85,10 @@
 @startuml
 
 namespace ProjectManagment  {
+
+entity ProjectMember <<ENTITY>> {
+    ID: UUID
+}
 
 entity Project <<ENTITY>> {
     ID: UUID
@@ -140,15 +147,17 @@ entity User <<ENTITY>>{
 }
 }
 
+Project "1.1  "<-l--"0.*" ProjectMember 
 Project "1.1  "<---"0.*" Task
 Project "1.1 "<---"0.* " PaymentData
 Project "1.1"<---"0.*   " Review
 
-Project "1.1"<-l--"0.*" Member
 Role "1.1"<---"0.*" Member
 Role "1.1"<---"0.*" RoleGrant
 Permission "1.1"<---"0.*" RoleGrant
 User "1.1"<---"0.*" Member
+
+Member "1.1  "<---"0.*" ProjectMember
 
 @enduml
 
