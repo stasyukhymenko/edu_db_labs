@@ -233,4 +233,4 @@ Role_grant - це сутність-асоціація, яка зберігає �
 
 ## Relational Schema
 
-![Db_Model](https://github.com/illiakroshka/edu_db_labs/assets/87243401/835d4983-e09e-4fb4-ae57-06e8e84ed48e)
+![Db_Model](https://github.com/illiakroshka/edu_db_labs/assets/87243401/c2766f10-aee3-4dc2-a3ed-fb4fd6e3ed10)
