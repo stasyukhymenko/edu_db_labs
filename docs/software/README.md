@@ -1,6 +1,7 @@
 # Реалізація інформаційного та програмного забезпечення
 
-В рамках проєкту розробляється: 
+В рамках проєкту розробляється:
+
 ## SQL-скрипт для створення на початкового наповнення бази даних
 
 ```sql
@@ -251,5 +252,395 @@ INSERT INTO `project_db`.`tasks` (`Name`, `Developer`, `Status`, `Deadline`, `Pr
 
 ```
 
-- RESTfull сервіс для управління даними
+## RESTfull сервіс для управління даними
 
+### Вхідний файл програми
+
+```js
+const express = require("express");
+const mysql = require("mysql2");
+const connect = require("./connect");
+const projectsRouter = require("./routes/projectsRoutes");
+const usersRouter = require("./routes/usersRoutes");
+const paymentsRouter = require("./routes/paymentsRoutes");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json());
+app.use(usersRouter);
+app.use(projectsRouter);
+app.use(paymentsRouter);
+
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
+```
+
+### Файл для встановлення доступу до бази даних
+
+```js
+const mysql = require("mysql2");
+require("dotenv").config();
+
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
+});
+
+pool.getConnection((err, connection) => {
+  if (err) {
+    console.error("Error connecting to MySQL:", err);
+    return;
+  }
+  console.log("Connected to MySQL database");
+  connection.release();
+});
+
+module.exports = pool.promise();
+```
+
+### CRUD для користувачів
+
+#### Маршрути
+
+```js
+const express = require("express");
+const usersRouter = express.Router();
+const controllers = require("../controllers/usersControllers");
+
+usersRouter.post("/users", controllers.createUser);
+
+usersRouter.get("/users", controllers.getAllUsers);
+
+usersRouter.get("/users/:id", controllers.getUserById);
+
+usersRouter.put("/users/:id", controllers.updateUserById);
+
+usersRouter.delete("/users/:id", controllers.deleteUserById);
+
+module.exports = usersRouter;
+```
+
+#### Контроллер
+
+```js
+const pool = require("../connect");
+
+exports.createUser = async (req, res) => {
+  try {
+    const { Login, Picture, Password, Email, Role } = req.body;
+    const [result] = await pool.execute(
+      "INSERT INTO users (Login, Picture, Password, email, role) VALUES (?, ?, ?, ?, ?)",
+      [Login, Picture, Password, Email, Role]
+    );
+    res.status(201).json({ id: result.insertId, Login, Picture, Email, Role });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.getAllUsers = async (req, res) => {
+  try {
+    const [rows] = await pool.execute("SELECT * FROM users");
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.getUserById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.execute("SELECT * FROM users WHERE id = ?", [id]);
+    if (rows.length === 0) {
+      res.status(404).json({ error: "User not found" });
+    } else {
+      res.status(200).json(rows[0]);
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.updateUserById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { Login, Picture, Password, Email, Role } = req.body;
+    const [result] = await pool.execute(
+      "UPDATE users SET Login = ?, Picture = ?, Password = ?, Email = ?, Role = ? WHERE id = ?",
+      [Login, Picture, Password, Email, Role, id]
+    );
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: "User not found" });
+    } else {
+      res.status(200).json({ id, Login, Picture, Email, Role });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.deleteUserById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+    try {
+      await connection.execute(
+        "DELETE FROM projects_members WHERE MemberId = ?",
+        [id]
+      );
+      await connection.execute("DELETE FROM members WHERE UserId = ?", [id]);
+      await connection.execute("DELETE FROM users WHERE id = ?", [id]);
+      await connection.commit();
+
+      res.status(204).end();
+    } catch (error) {
+      await connection.rollback();
+      console.error(error);
+      res.status(500).json({ error: "Internal Server Error" });
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+```
+
+### CRUD для проєктів
+
+#### Маршрути
+
+```js
+const express = require("express");
+const projectsRouter = express.Router();
+const controllers = require("../controllers/projectsControllers");
+
+projectsRouter.post("/projects", controllers.createProject);
+
+projectsRouter.get("/projects", controllers.getAllProjects);
+
+projectsRouter.get("/projects/:id", controllers.getProjectsById);
+
+projectsRouter.put("/projects/:id", controllers.updateProjectById);
+
+projectsRouter.delete("/projects/:id", controllers.deleteProject);
+
+module.exports = projectsRouter;
+```
+
+#### Контроллер
+
+```js
+const pool = require("../connect");
+
+exports.createProject = async (req, res) => {
+  try {
+    const { Name, Description, Status } = req.body;
+    const [result] = await pool.execute(
+      "INSERT INTO projects (Name, Description, Status) VALUES (?, ?, ?)",
+      [Name, Description, Status]
+    );
+    res.status(201).json({ id: result.insertId, Name, Description, Status });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.getAllProjects = async (req, res) => {
+  try {
+    const [rows] = await pool.execute("SELECT * FROM projects");
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.getProjectsById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.execute("SELECT * FROM projects WHERE id = ?", [
+      id,
+    ]);
+    if (rows.length === 0) {
+      res.status(404).json({ error: "Project not found" });
+    } else {
+      res.status(200).json(rows[0]);
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.updateProjectById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { Name, Description, Status } = req.body;
+    const [result] = await pool.execute(
+      "UPDATE projects SET Name = ?, Description = ?, Status = ? WHERE id = ?",
+      [Name, Description, Status, id]
+    );
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: "Project not found" });
+    } else {
+      res.status(200).json({ id, Name, Description, Status });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.deleteProject = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [result] = await pool.execute("DELETE FROM projects WHERE id = ?", [
+      id,
+    ]);
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: "Project not found" });
+    } else {
+      res.status(204).end();
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+```
+
+### CRUD для оплати
+
+#### Маршрути
+
+```js
+const express = require("express");
+const paymentsRouter = express.Router();
+const paymentController = require("../controllers/paymentsController");
+
+paymentsRouter.post("/payments", paymentController.createPayment);
+
+paymentsRouter.get("/payments", paymentController.getAllPayments);
+
+paymentsRouter.get("/payments/:id", paymentController.getPaymentById);
+
+paymentsRouter.put("/payments/:id", paymentController.updatePaymentById);
+
+paymentsRouter.delete("/payments/:id", paymentController.deletePayment);
+
+module.exports = paymentsRouter;
+```
+
+#### Контроллер
+
+```js
+const pool = require("../connect");
+
+exports.createPayment = async (req, res) => {
+  try {
+    const { CardNumber, CardCVV, CardExpireDate, Email, ProjectId } = req.body;
+    const [result] = await pool.execute(
+      "INSERT INTO payments (CardNumber, CardCVV, CardExpireDate, Email, ProjectId) VALUES (?, ?, ?, ?, ?)",
+      [CardNumber, CardCVV, CardExpireDate, Email, ProjectId]
+    );
+    console.log(result);
+    res
+      .status(201)
+      .json({ id: result.insertId, message: "Payment created successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.getAllPayments = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.query("SELECT * FROM payments");
+    res.status(200).json(rows);
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    connection.release();
+  }
+};
+
+exports.getPaymentById = async (req, res) => {
+  const { id } = req.params;
+  const connection = await pool.getConnection();
+  try {
+    const [rows] = await connection.query(
+      "SELECT * FROM payments WHERE id = ?",
+      [id]
+    );
+    if (rows.length === 0) {
+      res.status(404).json({ error: "Payment not found" });
+    } else {
+      res.status(200).json(rows[0]);
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    connection.release();
+  }
+};
+
+exports.updatePaymentById = async (req, res) => {
+  const { id } = req.params;
+  const { CardNumber, CardCVV, CardExpireDate, Email, ProjectId } = req.body;
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [result] = await connection.query(
+      "UPDATE payments SET CardNumber = ?, CardCVV = ?, CardExpireDate = ?, Email = ?, ProjectId = ? WHERE id = ?",
+      [CardNumber, CardCVV, CardExpireDate, Email, ProjectId, id]
+    );
+    await connection.commit();
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: "Payment not found" });
+    } else {
+      res.status(200).json({ message: "Payment updated successfully" });
+    }
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    connection.release();
+  }
+};
+
+exports.deletePayment = async (req, res) => {
+  const { id } = req.params;
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [result] = await connection.query(
+      "DELETE FROM payments WHERE id = ?",
+      [id]
+    );
+    await connection.commit();
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: "Payment not found" });
+    } else {
+      res.status(200).json({ message: "Payment deleted successfully" });
+    }
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    connection.release();
+  }
+};
+```
